@@ -303,7 +303,11 @@ export const ComplianceMetadataSchema = z.object({
     .boolean()
     .describe("EU AI Act: User acknowledged AI assistance"),
 
-  data_retention_date: z.string().describe("Data deletion date (ISO 8601)"),
+  data_retention_date: z
+    .string()
+    .nullable()
+    .optional()
+    .describe("Data deletion date (ISO 8601)"),
 
   timestamp: z
     .number()

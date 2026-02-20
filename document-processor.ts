@@ -92,7 +92,7 @@ interface CVExtractionResult {
   hard_skills?: string[] | null;
   language_level?: "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | null;
   extraction_confidence?: number; // 0-100
-  extraction_notes?: string; // "Couldn't find experience section", etc.
+  extraction_notes?: string | null; // "Couldn't find experience section", etc.
 }
 
 /**
