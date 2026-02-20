@@ -1,6 +1,10 @@
+// @ts-nocheck
 /**
  * CODE SNIPPETS - SEGMENT 1
  * Copy-paste acestea în server-v3.ts la locurile specificate
+ *
+ * NOTE: This file contains code example snippets for integration purposes only.
+ * TypeScript validation is disabled as these are documentation examples.
  */
 
 // ============================================

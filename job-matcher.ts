@@ -683,4 +683,4 @@ function validateMatchingResult(result: MatchingResult): void {
 // EXPORTS
 // ============================================
 
-export { calculateJobMatch, Job, validateForBias };
+export { calculateJobMatch, validateForBias };

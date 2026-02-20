@@ -154,7 +154,8 @@ async function gasesteJobDinGoogle(candidat: UserSession): Promise<string> {
     });
 
     if (match) {
-      return `🚀 MATCH GĂSIT! ${candidat.nume}, am un post de ${match.Titlu} în ${match["Oraș"]} la ${match["Salariu (€/oră)"]}€/oră. Te interesează? Scrie "Da" sau "Nu"`;
+      const m = match as any;
+      return `🚀 MATCH GĂSIT! ${candidat.nume}, am un post de ${m.Titlu} în ${m["Oraș"]} la ${m["Salariu (€/oră)"]}€/oră. Te interesează? Scrie "Da" sau "Nu"`;
     } else {
       return `${candidat.nume}, momentan nu avem un job care să se potrivească perfect cu ${candidat.hasVCA ? "VCA" : ""} ${candidat.hasBSN ? "BSN" : ""}, dar o să ți-l sunăm!`;
     }

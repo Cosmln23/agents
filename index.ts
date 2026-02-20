@@ -58,7 +58,8 @@ async function gasesteJobDinGoogle(candidat: any): Promise<string> {
     });
 
     if (match) {
-      return `🚀 MATCH GĂSIT! Salut ${candidat.nume}, am un post de ${match.Titlu} în ${match["Oraș"]} la ${match["Salariu (€/oră)"]}€/oră. Te interesează?`;
+      const m = match as any;
+      return `🚀 MATCH GĂSIT! Salut ${candidat.nume}, am un post de ${m.Titlu} în ${m["Oraș"]} la ${m["Salariu (€/oră)"]}€/oră. Te interesează?`;
     } else {
       return `Salut ${candidat.nume}, momentan niciun job din tabel nu se potrivește cu profilul tău (VCA:${candidat.hasVCA}, BSN:${candidat.hasBSN}).`;
     }

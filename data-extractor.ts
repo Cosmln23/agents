@@ -455,4 +455,4 @@ export function shouldExtract(message: string): boolean {
 // ============================================
 
 export { extractDataWithStructured };
-export { ExtractionSchema, ExtractionResult };
+export { ExtractionSchema };

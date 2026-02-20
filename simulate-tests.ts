@@ -482,10 +482,10 @@ SHOW ALL CANDIDATES`;
           };
         } catch (error: any) {
           // Schema correctly rejects invalid data
-          if (error instanceof z.ZodError && Array.isArray(error.errors)) {
+          if (error instanceof z.ZodError && Array.isArray(error.issues)) {
             return {
               success: true,
-              validationFailures: error.errors.length,
+              validationFailures: error.issues.length,
               action: "SCHEMA ENFORCED - Invalid data rejected",
             };
           }
