@@ -208,7 +208,7 @@ Returnează DOAR JSON:
       return extracted;
     }
   } catch (error) {
-    console.error("❌ Eroare la extragere:", error);
+    console.error("❌ Extraction error:", error);
     return null;
   }
 }
@@ -247,7 +247,7 @@ async function gasesteJobDinGoogle(candidat: UserSession): Promise<string> {
     }
 
   } catch (error) {
-    console.error("❌ Eroare la matching:", error);
+    console.error("❌ Job matching error:", error);
     return "Scuze, ceva nu merge. Incearcă din nou!";
   }
 }
@@ -310,11 +310,11 @@ async function handleUserMessage(from: string, msgText: string): Promise<string>
 
     if (extracted) {
       // MERGE DATELE - UPDATE PROFIL
-      user.nume = user.nume || extracted.nume;
-      user.hasVCA = user.hasVCA !== undefined ? user.hasVCA : extracted.hasVCA;
-      user.hasBSN = user.hasBSN !== undefined ? user.hasBSN : extracted.hasBSN;
-      user.permis = user.permis !== undefined ? user.permis : extracted.permis;
-      user.limbi = user.limbi || extracted.limbi;
+      user.nume = user.nume ?? extracted.nume;
+      user.hasVCA = user.hasVCA ?? extracted.hasVCA;
+      user.hasBSN = user.hasBSN ?? extracted.hasBSN;
+      user.permis = user.permis ?? extracted.permis;
+      user.limbi = user.limbi ?? extracted.limbi;
       user.lastMessage = msgText;
       user.lastUpdate = Date.now();
 

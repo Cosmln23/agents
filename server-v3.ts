@@ -1,3 +1,8 @@
+/**
+ * @ts-nocheck - EXPERIMENTAL VERSION (server-v3)
+ * This is a prototype/experimental implementation with untyped dependencies.
+ * Use server.ts or server-v2.ts for production (type-checked versions).
+ */
 // @ts-nocheck
 import express from "express";
 import bodyParser from "body-parser";

@@ -112,7 +112,7 @@ function getErrorMessage(
 // ============================================
 // 2. AGENTUL 2: EXTRACTOR
 // ============================================
-async function extractCandidate(mesaj: string) {
+export async function extractCandidate(mesaj: string) {
   try {
     const response = await openai.chat.completions.create({
       model: "gpt-4o-mini",
@@ -154,7 +154,7 @@ Structura trebuie să fie EXACT:
 // ============================================
 // 3. AGENTUL 3: MATCHER
 // ============================================
-async function gasesteJobDinGoogle(candidat: any): Promise<string> {
+export async function gasesteJobDinGoogle(candidat: any): Promise<string> {
   try {
     console.log(`🔍 Căut joburi pentru ${candidat.nume}...`);
 
@@ -251,8 +251,8 @@ app.post("/webhook", async (req, res) => {
         console.log(`✅ Răspuns trimis cu succes!\n`);
       }
     } catch (error) {
-      console.error("❌ Eroare la procesare:", error);
-      // Trimite mesaj de eroare pe WhatsApp
+      console.error("❌ Message processing error:", error);
+      // Send error message to WhatsApp
       const from = body.entry?.[0]?.changes?.[0]?.value?.messages?.[0]?.from;
       if (from) {
         await trimiteMesajWhatsApp(from, "Scuze, ceva nu merge. Incearcă din nou mai târziu!");
@@ -302,4 +302,3 @@ app.listen(PORT, () => {
   console.log(`   ngrok http ${PORT}\n`);
 });
 
-export { extractCandidate, gasesteJobDinGoogle };

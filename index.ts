@@ -28,8 +28,13 @@ interface Job {
 // 3. LINK-UL TĂU REAL LA GOOGLE SHEETS:
 const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vSO-y2ueZ1ocKYEpTrLH6sAWVDEW0y42JQV8nSp2e77s5zb0XSOnq4MgOxBZxhysXKL-JEOas5bAbq3/pub?output=csv";
 
-// 4. LOGICA AGENTULUI 3 (Matcher-ul cu Google Sheets)
-async function gasesteJobDinGoogle(candidat: any): Promise<string> {
+/**
+ * Agent 3: Job Matcher - Find suitable jobs from Google Sheets
+ *
+ * @param candidat - Candidate object with hasVCA, hasBSN flags
+ * @returns Promise<string> - WhatsApp message with job offer or no match message
+ */
+export async function gasesteJobDinGoogle(candidat: any): Promise<string> {
   try {
     console.log(`\n--- Agentul 3 accesează Google Sheets pentru ${candidat.nume} ---`);
 
@@ -65,7 +70,7 @@ async function gasesteJobDinGoogle(candidat: any): Promise<string> {
     }
 
   } catch (error) {
-    console.error("❌ Eroare la citirea tabelului:", error);
+    console.error("❌ Google Sheets read error:", error);
     return "Eroare tehnică la baza de date.";
   }
 }
@@ -75,8 +80,16 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
 
-// 3. Funcția care extrage datele
-async function extractCandidate(mesaj: string) {
+/**
+ * Agent 2: Data Extractor - Parse candidate info from user message
+ *
+ * Sends message to OpenAI and extracts structured data (name, certifications, languages)
+ *
+ * @param mesaj - User message text
+ * @returns Promise<CandidateData> - Validated candidate object
+ * @throws Error if JSON extraction fails or validation fails
+ */
+export async function extractCandidate(mesaj: string) {
   const response = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [

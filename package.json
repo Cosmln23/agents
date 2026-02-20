@@ -1,7 +1,7 @@
 {
   "name": "recrutare-ai-whatsapp",
-  "version": "1.0.0",
-  "description": "",
+  "version": "1.1.0",
+  "description": "Enterprise WhatsApp recruitment bot with GDPR compliance (v1.1.0)",
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
