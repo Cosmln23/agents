@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "titlu": "Order Picker",
+    "oras": "Tilburg",
+    "salariu": 14,
+    "necesitaVCA": true,
+    "necesitaBSN": false
+  },
+  {
+    "id": 2,
+    "titlu": "Montator Panouri",
+    "oras": "Rotterdam",
+    "salariu": 16,
+    "necesitaVCA": false,
+    "necesitaBSN": true
+  },
+  {
+    "id": 3,
+    "titlu": "Șofer Dubă",
+    "oras": "Amsterdam",
+    "salariu": 15,
+    "necesitaVCA": false,
+    "necesitaBSN": false
+  }
+]
