@@ -159,6 +159,21 @@ async function extractDataWithStructured(
   session: UserSession,
   clientConfig: ClientConfig
 ): Promise<ExtractionResult | null> {
+  // GDPR COMPLIANCE: Enforce consent before extraction (Issue 3.3)
+  if (!session.consent_given) {
+    console.warn(
+      `⚠️ [GDPR] Extraction blocked: No consent for ${session.phone}`
+    );
+    return null;
+  }
+
+  if (!session.ai_disclosure_acknowledged) {
+    console.warn(
+      `⚠️ [EU AI ACT] Extraction blocked: No AI disclosure acknowledgment for ${session.phone}`
+    );
+    return null;
+  }
+
   try {
     // Step 1: Initialize OpenAI client with type-safe extended API
     const openai = new OpenAIExtended(process.env.OPENAI_API_KEY);

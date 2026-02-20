@@ -14,6 +14,32 @@ app.use(bodyParser.json());
 const PORT = process.env.PORT || 3000;
 
 // ============================================
+// ENVIRONMENT & LOGGING CONFIGURATION
+// ============================================
+
+const isDevelopment = process.env.NODE_ENV !== "production";
+
+/**
+ * Log with conditional emoji (Issue 3.12)
+ * Emoji only in development, clean logs in production
+ */
+function logWithEmoji(
+  emoji: string,
+  level: "log" | "warn" | "error",
+  message: string,
+  data?: any
+): void {
+  const prefix = isDevelopment ? emoji + " " : "[" + level.toUpperCase() + "] ";
+  const logFunction = console[level] as (...args: any[]) => void;
+
+  if (data) {
+    logFunction(`${prefix}${message}`, data);
+  } else {
+    logFunction(`${prefix}${message}`);
+  }
+}
+
+// ============================================
 // 1. SCHEMA & FUNCȚII DE LA INDEX.TS
 // ============================================
 
@@ -30,6 +56,58 @@ const GOOGLE_SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
+
+// ============================================
+// ERROR MESSAGE HANDLER (Consistent Language)
+// ============================================
+
+/**
+ * Generate localized error messages (Issue 3.11)
+ * Ensures consistency across application
+ */
+function getErrorMessage(
+  errorCode: string,
+  language: "ro" | "nl" | "en" | "de" = "ro"
+): string {
+  const messages: Record<string, Record<string, string>> = {
+    EXTRACTION_FAILED: {
+      ro: "Nu am putut citi mesajul. Poți rescrie mai clar?",
+      nl: "Ik kon je bericht niet lezen. Kun je duidelijker schrijven?",
+      en: "I couldn't read your message. Can you be clearer?",
+      de: "Ich konnte deine Nachricht nicht lesen. Kannst du klarer schreiben?",
+    },
+    NO_MATCHES: {
+      ro: "Din păcate, nu avem joburi potrivite în moment. Te rog reîncearcă mai târziu!",
+      nl: "Helaas hebben we nu geen geschikte banen. Probeer later opnieuw!",
+      en: "Unfortunately, we don't have suitable jobs right now. Try again later!",
+      de: "Leider haben wir gerade keine geeigneten Jobs. Versuchen Sie später erneut!",
+    },
+    API_ERROR: {
+      ro: "Ceva nu merge pe serverul nostru. Încearcă din nou mai târziu!",
+      nl: "Er is iets misgegaan met onze server. Probeer later opnieuw!",
+      en: "Something went wrong with our server. Try again later!",
+      de: "Etwas ist mit unserem Server schief gelaufen. Versuchen Sie später erneut!",
+    },
+    RATE_LIMITED: {
+      ro: "Prea multe mesaje. Așteaptă o secundă și reîncearcă!",
+      nl: "Te veel berichten. Wacht even en probeer opnieuw!",
+      en: "Too many messages. Wait a second and try again!",
+      de: "Zu viele Nachrichten. Warten Sie kurz und versuchen Sie erneut!",
+    },
+    TIMEOUT: {
+      ro: "Cererea a expirat. Te rog reîncearcă!",
+      nl: "Verzoek is verlopen. Probeer alstublieft opnieuw!",
+      en: "Request timed out. Please try again!",
+      de: "Anfrage abgelaufen. Bitte versuchen Sie erneut!",
+    },
+  };
+
+  return (
+    messages[errorCode]?.[language] ||
+    messages[errorCode]?.["en"] ||
+    "An error occurred. Please try again."
+  );
+}
 
 // ============================================
 // 2. AGENTUL 2: EXTRACTOR

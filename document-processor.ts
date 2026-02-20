@@ -59,7 +59,16 @@ const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024;
 const TEMP_DIR = "/tmp";
 
 /** Timeout for file download (30 seconds) */
-const DOWNLOAD_TIMEOUT_MS = 30000;
+const DOWNLOAD_TIMEOUT_MS = 30 * 1000;
+
+/** Timeout for Vision API (45 seconds - longer due to image processing) */
+const VISION_TIMEOUT_MS = 45 * 1000;
+
+/** Maximum retries for failed downloads */
+const MAX_DOWNLOAD_RETRIES = 3;
+
+/** Base64 encoding chunk size for large files */
+const BASE64_CHUNK_SIZE = 1024 * 1024; // 1MB chunks
 
 /** Supported MIME types */
 const SUPPORTED_MIME_TYPES = [

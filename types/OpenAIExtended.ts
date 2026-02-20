@@ -89,13 +89,30 @@ export class OpenAIExtended {
       };
       temperature?: number;
       max_tokens?: number;
+      timeout?: number; // NEW: Optional timeout in milliseconds (default 30s)
     }
   ): Promise<T> {
     try {
-      // Call the beta API through proper typing (cast to any only here, not throughout codebase)
-      const response = await (this.client as any).beta.chat.completions.parse(
+      const timeout = options.timeout || 30000; // Default 30 seconds
+
+      // Create timeout promise that rejects after specified time
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(
+          () =>
+            reject(
+              new Error(
+                `OpenAI API timeout (${timeout}ms exceeded). Model: ${options.model}`
+              )
+            ),
+          timeout
+        )
+      );
+
+      // Race between API call and timeout
+      const apiCall = (this.client as any).beta.chat.completions.parse(
         options
       );
+      const response = await Promise.race([apiCall, timeoutPromise]);
 
       // Extract and validate the parsed output
       if (response.choices?.[0]?.message?.parsed) {
