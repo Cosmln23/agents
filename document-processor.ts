@@ -45,6 +45,7 @@ import { z } from "zod";
 import { UserSession } from "./types/UserSession";
 import { ClientConfig } from "./types/ClientConfig";
 import { mergeExtractedData } from "./data-extractor";
+import { OpenAIExtended } from "./types/OpenAIExtended";
 
 // ============================================
 // CONSTANTS & CONFIGURATION
@@ -416,9 +417,7 @@ async function extractDataFromDocument(
   clientConfig: ClientConfig
 ): Promise<CVExtractionResult | null> {
   try {
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const openai = new OpenAIExtended(process.env.OPENAI_API_KEY);
 
     // Step 1: Build vision-aware system prompt with privacy redaction
     const systemPrompt = buildVisionPrivacyPrompt(clientConfig, session);
@@ -431,8 +430,8 @@ async function extractDataFromDocument(
 
     console.log(`   📡 Calling OpenAI Vision (gpt-4o)...`);
 
-    // Step 3: Call OpenAI with vision capability
-    const response = await (openai as any).beta.chat.completions.parse({
+    // Step 3: Call OpenAI with vision capability (Type-safe, no `as any`)
+    const response = await openai.parseStructured<CVExtractionResult>({
       model: "gpt-4o",  // Vision-capable model
       messages: [
         {
@@ -456,13 +455,8 @@ async function extractDataFromDocument(
       max_tokens: 1000,  // Enough for extraction
     });
 
-    // Step 4: Parse response
-    if (!response.choices[0].message.parsed) {
-      console.warn(`⚠️ No parsed data from Vision API`);
-      return null;
-    }
-
-    const extracted = response.choices[0].message.parsed as CVExtractionResult;
+    // Step 4: Response is already parsed (parseStructured returns typed data directly)
+    const extracted = response as CVExtractionResult;
 
     // Step 5: Validate with Zod
     const validated = CVExtractionSchema.parse(extracted);

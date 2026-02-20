@@ -36,6 +36,7 @@ import {
   UserSessionSchema,
   safeParsePartial,
 } from "./schemas/zod-schemas";
+import { OpenAIExtended } from "./types/OpenAIExtended";
 
 // ============================================
 // EXTRACTION SCHEMA (Minimal)
@@ -159,10 +160,8 @@ async function extractDataWithStructured(
   clientConfig: ClientConfig
 ): Promise<ExtractionResult | null> {
   try {
-    // Step 1: Initialize OpenAI client with beta API
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    // Step 1: Initialize OpenAI client with type-safe extended API
+    const openai = new OpenAIExtended(process.env.OPENAI_API_KEY);
 
     // Step 2: Build extraction prompt
     // This tells the model: "Here's context about what we already know"
@@ -176,9 +175,9 @@ async function extractDataWithStructured(
       `📊 [EXTRACTION] Processing message for ${session.phone} (${clientConfig.clientId})`
     );
 
-    // Step 3: Call OpenAI Beta API with structured output
-    // beta.chat.completions.parse() guarantees response matches schema
-    const response = await (openai as any).beta.chat.completions.parse({
+    // Step 3: Call OpenAI Beta API with structured output (Type-safe, no `as any`)
+    // parseStructured() guarantees response matches schema
+    const response = await openai.parseStructured<ExtractionResult>({
       model: "gpt-4o-mini",  // Use mini model for speed (extraction only)
       messages: [
         {
@@ -197,14 +196,8 @@ async function extractDataWithStructured(
       temperature: 0,  // Deterministic: low temperature for reliable extraction
     });
 
-    // Step 4: Parse response
-    // response.choices[0].message.parsed contains validated data
-    if (!response.choices[0].message.parsed) {
-      console.warn(`⚠️ [EXTRACTION] No parsed data returned`);
-      return null;
-    }
-
-    const extracted = response.choices[0].message.parsed as ExtractionResult;
+    // Step 4: Response is already parsed (parseStructured returns typed data directly)
+    const extracted = response as ExtractionResult;
 
     // Step 5: Validate with Zod
     const validated = ExtractionSchema.parse(extracted);

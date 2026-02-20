@@ -6,6 +6,7 @@ import dotenv from "dotenv";
 import { z } from "zod";
 import OpenAI from "openai";
 import * as fs from "fs";
+import { UserSessionSchema } from "./schemas/zod-schemas";
 
 dotenv.config();
 
@@ -44,11 +45,96 @@ function loadSessions(): Record<string, UserSession> {
   return {};
 }
 
-function saveSessions(sessions: Record<string, UserSession>) {
+/**
+ * Enhanced saveSessions with Zod validation
+ * Prevents corrupted data from being saved (Issue 1.7)
+ */
+function saveSessions(sessions: Record<string, UserSession>): void {
   try {
-    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2));
+    // Validate all sessions before saving (Issue 1.7)
+    const validatedSessions: Record<string, UserSession> = {};
+    let invalidCount = 0;
+
+    for (const [phone, session] of Object.entries(sessions)) {
+      const validation = UserSessionSchema.safeParse(session);
+
+      if (validation.success) {
+        validatedSessions[phone] = validation.data as UserSession;
+      } else {
+        console.warn(`⚠️ Invalid session for ${phone}:`, validation.error.issues);
+        invalidCount++;
+        // Don't save invalid sessions
+      }
+    }
+
+    if (invalidCount > 0) {
+      console.warn(`⚠️ Skipped saving ${invalidCount} invalid sessions`);
+    }
+
+    fs.writeFileSync(SESSIONS_FILE, JSON.stringify(validatedSessions, null, 2));
+    console.log(`✅ Sessions saved (${Object.keys(validatedSessions).length} valid sessions)`);
+
   } catch (error) {
-    console.error("❌ Eroare la salvarea sesiunilor:", error);
+    console.error("❌ Error saving sessions:", error);
+  }
+}
+
+// ============================================
+// SECURITY: Session Cleanup & Memory Leaks (1.7 & 2.6)
+// ============================================
+
+/**
+ * Clean expired sessions (older than 24 hours)
+ * Prevent memory leaks and data corruption
+ * Runs every 1 hour via setInterval
+ */
+function cleanExpiredSessions(): void {
+  const now = Date.now();
+  const SESSION_TIMEOUT = 24 * 60 * 60 * 1000; // 24 hours
+  let deletedCount = 0;
+
+  for (const [phone, session] of Object.entries(sessions)) {
+    const lastUpdate = session.lastUpdate || 0;
+    const age = now - lastUpdate;
+
+    if (age > SESSION_TIMEOUT) {
+      // Validate before deleting (safety check)
+      const isValid = UserSessionSchema.safeParse(session);
+
+      if (!isValid.success) {
+        console.warn(`⚠️ Corrupted session detected for ${phone}, deleting...`);
+      }
+
+      delete sessions[phone];
+      deletedCount++;
+      console.log(`🧹 Deleted expired session for ${phone} (age: ${(age / 1000 / 60 / 60).toFixed(1)}h)`);
+    }
+  }
+
+  if (deletedCount > 0) {
+    console.log(`✅ Session cleanup: Deleted ${deletedCount} expired sessions`);
+    saveSessions(sessions); // Persist changes
+  }
+}
+
+let cleanupInterval: NodeJS.Timeout;
+
+function startCleanupTask(): void {
+  // Run immediately on startup
+  cleanExpiredSessions();
+
+  // Run every 1 hour
+  cleanupInterval = setInterval(() => {
+    cleanExpiredSessions();
+  }, 60 * 60 * 1000);
+
+  console.log("✅ Session cleanup task started (runs every 1 hour)");
+}
+
+function stopCleanupTask(): void {
+  if (cleanupInterval) {
+    clearInterval(cleanupInterval);
+    console.log("🛑 Session cleanup task stopped");
   }
 }
 
@@ -368,4 +454,15 @@ app.listen(PORT, () => {
   console.log(`\n🚀 WEBHOOK V2 (STATE MANAGEMENT) ACTIV!`);
   console.log(`📍 Portul: ${PORT}`);
   console.log(`🧠 Memory: ${Object.keys(sessions).length} utilizatori activi\n`);
+
+  // Start session cleanup task
+  startCleanupTask();
+});
+
+// Graceful shutdown
+process.on("SIGTERM", () => {
+  console.log("\n🛑 Server shutting down...");
+  stopCleanupTask();
+  saveSessions(sessions);
+  process.exit(0);
 });

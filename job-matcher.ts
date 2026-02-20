@@ -34,6 +34,7 @@ import OpenAI from "openai";
 import { z } from "zod";
 import { UserSession } from "./types/UserSession";
 import { ClientConfig } from "./types/ClientConfig";
+import { OpenAIExtended } from "./types/OpenAIExtended";
 
 // ============================================
 // TYPE DEFINITIONS & SCHEMAS
@@ -390,9 +391,7 @@ async function scoreJobMatch(
   completeness: "complete" | "partial" | "incomplete"
 ): Promise<JobMatch | null> {
   try {
-    const openai = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY,
-    });
+    const openai = new OpenAIExtended(process.env.OPENAI_API_KEY);
 
     // Step 1: Build evaluation prompt
     const evalPrompt = buildJobMatchPrompt(
@@ -402,10 +401,10 @@ async function scoreJobMatch(
       completeness
     );
 
-    // Step 2: Call OpenAI with structured output
+    // Step 2: Call OpenAI with structured output (Type-safe, no `as any`)
     console.log(`   📊 Scoring ${job.jobTitle}...`);
 
-    const response = await (openai as any).beta.chat.completions.parse({
+    const response = await openai.parseStructured<JobMatch>({
       model: "gpt-4o-mini",  // Fast for matching
       messages: [
         {
@@ -429,12 +428,8 @@ async function scoreJobMatch(
       max_tokens: 800,
     });
 
-    if (!response.choices[0].message.parsed) {
-      console.warn(`   ⚠️ No parsed match for ${job.jobTitle}`);
-      return null;
-    }
-
-    const match = response.choices[0].message.parsed as JobMatch;
+    // parseStructured returns the parsed data directly (type-safe)
+    const match = response as JobMatch;
 
     // Step 3: Validate reasoning for bias
     const biasCheck = validateForBias(match.matchReasoning);
