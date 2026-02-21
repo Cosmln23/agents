@@ -16,11 +16,14 @@
  * Flow: new → pending_consent → collecting_data → offered_job → completed
  */
 export type OnboardingStage =
-  | "new"               // User just started conversation
-  | "pending_consent"   // Waiting for consent/AI disclosure acknowledgement
-  | "collecting_data"   // Collecting education, experience, skills, language
-  | "offered_job"       // Job match found, waiting for user decision
-  | "completed";        // User accepted job or opted out
+  | "new"                       // User just started conversation
+  | "pending_consent"           // Waiting for GDPR consent (DA/NU)
+  | "collecting_data"           // Collecting education, experience, skills via CV or text
+  | "waiting_qualification"     // CV read → asking start date + accommodation needs
+  | "waiting_dispatch_consent"  // Showing job matches → asking GDPR consent to send profile to office
+  | "offered_job"               // Legacy: job match found (kept for compatibility)
+  | "dispatched"                // Profile sent to office, awaiting recruiter callback
+  | "completed";                // User accepted job or opted out
 
 /**
  * Language proficiency levels following EU standards (CEFR)
@@ -189,6 +192,70 @@ export interface UserSession {
    * Populated: Throughout conversation stages
    */
   ai_notes?: string;
+
+  // ============================================
+  // QUALIFICATION DATA (Stage: waiting_qualification)
+  // Collected after CV read, before dispatch
+  // ============================================
+
+  /**
+   * When the candidate can start working
+   * Examples: "Imediat", "Preaviz 2 săptămâni", "01.04.2026"
+   * Collected: Stage "waiting_qualification"
+   */
+  availability?: string;
+
+  /**
+   * Whether candidate needs accommodation from agency
+   * Examples: "Da, am nevoie de cazare", "Nu, am locuință proprie"
+   * Collected: Stage "waiting_qualification"
+   */
+  accommodation_needed?: string;
+
+  /**
+   * Domain/area of activity extracted from CV
+   * Examples: "Transport și Logistică", "IT", "Sănătate"
+   * Extracted: From CV via Vision API
+   */
+  domeniu_activitate?: string;
+
+  /**
+   * Most recent job role extracted from CV
+   * Examples: "Transport Coordinator la Pliti Dispo SRL"
+   * Extracted: From CV via Vision API
+   */
+  experienta_recenta?: string;
+
+  /**
+   * Countries/cities where candidate worked
+   * Examples: "România, Olanda, Germania"
+   * Extracted: From CV via Vision API
+   */
+  mobilitate?: string;
+
+  // ============================================
+  // DISPATCH DATA (Stage: dispatched)
+  // GDPR compliance audit trail
+  // ============================================
+
+  /**
+   * Timestamp when user gave explicit consent to send profile to office
+   * GDPR Article 7 - Explicit consent required before data transfer
+   * Format: Unix timestamp (milliseconds)
+   */
+  dispatch_consent_timestamp?: number;
+
+  /**
+   * Timestamp when profile was dispatched to office
+   * Used for GDPR audit trail
+   */
+  dispatch_timestamp?: number;
+
+  /**
+   * Job IDs that were matched and presented to candidate
+   * Stored for audit trail
+   */
+  matched_job_ids?: string[];
 
   // ============================================
   // COMPLIANCE & PRIVACY (NEW - Segment 2)
