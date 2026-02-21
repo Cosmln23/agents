@@ -20,6 +20,7 @@ export type OnboardingStage =
   | "pending_consent"           // Waiting for GDPR consent (DA/NU)
   | "collecting_data"           // Collecting education, experience, skills via CV or text
   | "waiting_qualification"     // CV read → asking start date + accommodation needs
+  | "waiting_candidate_note"    // NEW: Asking if candidate wants to add a personal note for HR
   | "waiting_dispatch_consent"  // Showing job matches → asking GDPR consent to send profile to office
   | "offered_job"               // Legacy: job match found (kept for compatibility)
   | "dispatched"                // Profile sent to office, awaiting recruiter callback
@@ -232,6 +233,19 @@ export interface UserSession {
    * Extracted: From CV via Vision API
    */
   mobilitate?: string;
+
+  /**
+   * Personal note from the candidate to the recruiter
+   * Examples: "Prefer ture de noapte", "Am mașină proprie"
+   * Collected: Stage "waiting_candidate_note"
+   */
+  candidate_note?: string;
+
+  /**
+   * General sentiment/mood of the candidate during qualification
+   * Extracted via LLM Contextual Analysis
+   */
+  user_sentiment?: string;
 
   // ============================================
   // DISPATCH DATA (Stage: dispatched)

@@ -57,6 +57,10 @@ import {
   Job
 } from "./job-matcher";
 
+// Extended OpenAI Client (Core)
+import { OpenAIExtended } from "./types/OpenAIExtended";
+import { z } from "zod";
+
 // Mock Jobs Data (Test data - replace with Google Sheets in production)
 import { MOCK_JOBS_BY_CLIENT } from "./data/jobs-mock";
 
@@ -345,74 +349,50 @@ async function sendWhatsAppMessage(toPhone: string, text: string): Promise<void>
  *   "nu-mi dau acordul" → "NO"
  *   "hmm, nu stiu" → "UNCLEAR"
  */
-function normalizeConsent(text: string): "YES" | "NO" | "UNCLEAR" {
+// LOGIC: Using LLM as a Reasoning Layer to handle informal language and typos.
+async function analyzeIntentAI(text: string, context: string): Promise<"YES" | "NO" | "UNCLEAR"> {
   if (!text) return "UNCLEAR";
 
-  // Step 1: Clean text - lowercase, remove diacritics, trim
-  let cleaned = text
-    .toLowerCase()
-    .trim()
-    // Remove diacritics (ă→a, ș→s, ț→t, etc.)
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    // Remove punctuation/special chars but keep spaces
-    .replace(/[^\w\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  try {
+    const openai = new OpenAIExtended(process.env.OPENAI_API_KEY);
+    const IntentSchema = z.object({
+      intent: z.enum(["YES", "NO", "UNCLEAR"]).describe("The extracted intent of the user. YES for agree/confirm/yes. NO for disagree/refuse/no. UNCLEAR for ambiguity.")
+    });
 
-  // Step 2: Check for YES patterns
-  const yesPatterns = [
-    /^da\b/,           // starts with "da"
-    /\byes\b/,         // contains "yes"
-    /\bacord/,         // contains "acord"
-    /\baccept/,        // contains "accept"
-    /\bconfirm/,       // contains "confirm"
-    /\bstiu\b/,        // "stiu" (I agree in casual Romanian)
-    /\bde\s+acord/,    // "de acord" (I agree)
-  ];
+    const response = await openai.parseStructured({
+      model: "gpt-4o-mini",
+      messages: [
+        {
+          role: "system",
+          content: `You are an intent analyzer for a recruiter bot. Analyze the candidate's message in the context of: '${context}'. Map informal Romanian/English, typos, and slang to YES, NO, or UNCLEAR.\n\nIMPORTANT: You MUST return ONLY a raw JSON object with a single key "intent". Example: {"intent": "YES"}`
+        },
+        {
+          role: "user",
+          content: `User message: "${text}"`
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "IntentAnalysis",
+          schema: IntentSchema,
+          strict: true
+        }
+      },
+      temperature: 0
+    });
 
-  for (const pattern of yesPatterns) {
-    if (pattern.test(cleaned)) return "YES";
+    return (response as any).intent || "UNCLEAR";
+  } catch (error) {
+    logWithEmoji("⚠️", "warn", "AI Intent Analysis failed, falling back to basic matching:", error);
+    // Basic Fallback logic
+    const cleaned = text.toLowerCase().trim();
+    if (/da\b|\byes\b|\bacord|\baccept|\bconfirm|\bde\s+acord|ok/i.test(cleaned)) return "YES";
+    if (/nu\b|\bno\b|\brefuz|\bnu\s+sunt/i.test(cleaned)) return "NO";
+    return "UNCLEAR";
   }
-
-  // Step 3: Check for NO patterns
-  const noPatterns = [
-    /^nu\b/,           // starts with "nu"
-    /\bno\b/,          // contains "no"
-    /\brefuz/,         // contains "refuz"
-    /\bdeclin/,        // contains "declin"
-    /\bnu\s+sunt/,     // "nu sunt" (I'm not)
-  ];
-
-  for (const pattern of noPatterns) {
-    if (pattern.test(cleaned)) return "NO";
-  }
-
-  return "UNCLEAR";
 }
 
-// ============================================
-// JOB MATCH MESSAGE BUILDER
-// ============================================
-
-/**
- * Builds a human-readable job matches list for WhatsApp message.
- * Shows top matches with score, title, city, salary.
- *
- * @param matches - Top job matches from calculateJobMatch()
- * @returns Formatted string for WhatsApp message
- */
-function buildJobMatchMessage(matches: any[]): string {
-  if (!matches || matches.length === 0) return "(niciun job găsit)";
-
-  return matches
-    .slice(0, 3)
-    .map((match, i) => {
-      const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉";
-      return `${medal} ${match.jobTitle} — ${match.city}\n   💰 ${match.salary || "Salariu negociabil"}\n   📊 Potrivire: ${match.matchScore}%\n   💡 ${match.matchReasoning?.substring(0, 100) || ""}...`;
-    })
-    .join("\n\n");
-}
 
 // ============================================
 // DISPATCH TO OFFICE (GDPR-COMPLIANT EMAIL)
@@ -480,6 +460,9 @@ DETALII LOGISTICE (din conversation):
 
 JOBURI POTRIVITE (AI Matching):
 ${jobsSummary || "(niciun match găsit)"}
+
+NOTĂ PERSONALĂ PENTRU HR:
+${session.candidate_note ? `"${session.candidate_note}"` : "(Candidatul nu a dorit să adauge o notă personală)"}
 
 ========================================
 GDPR & COMPLIANCE AUDIT TRAIL
@@ -571,7 +554,7 @@ async function handleUserMessage(
     // 🔐 CHECK GDPR CONSENT STATUS
     if (!session.consent_given) {
       const messageText = messageData?.text?.body || "";
-      const consent = normalizeConsent(messageText);
+      const consent = await analyzeIntentAI(messageText, "GDPR Profiling Consent (DA/NU)");
 
       if (consent === "YES") {
         session.consent_given = true;
@@ -638,6 +621,7 @@ async function handleUserMessage(
         // Graceful error message to user
         await sendWhatsAppMessage(from, BotMessages.cvDownloadFailed);
       }
+      return; // Stop processing after handling media
     }
 
     // ============================================
@@ -662,8 +646,18 @@ async function handleUserMessage(
           logWithEmoji("⚠️", "warn", `Background extraction error:`, error);
         });
 
-      // Acknowledge to user
-      await sendWhatsAppMessage(from, BotMessages.dataRecorded);
+      // Nu mai trimitem mesaj de confirmare "Mulțumesc! Am înregistrat informația" la fiecare mesaj.
+      // Confirmările vor veni natural din răspunsurile contextuale ale bot-ului.
+    } else if (session.stage === "collecting_data" && !mediaMetadata) {
+      // CONVERSATIONAL GUARDRAIL: Dacă suntem în etapa de colectare date (CV) dar am primit text invalid/prea scurt
+      // Știm că trebuie să așteptăm un document de la user
+      const hasCvData = session.education || session.experience_summary || (session.hard_skills && session.hard_skills.length > 0);
+
+      if (!hasCvData) {
+        logWithEmoji("⏳", "log", `[GUARDRAIL] User sent text while waiting for CV`);
+        await sendWhatsAppMessage(from, `Am înțeles! Aștept CV-ul tău sub formă de fișier (PDF) sau poză când ești gata. 📄`);
+        return;
+      }
     }
 
     // ============================================
@@ -672,15 +666,85 @@ async function handleUserMessage(
     // ============================================
 
     if (session.stage === "waiting_qualification" && messageText) {
-      // Save raw answer - AI extraction can parse it later
-      // Simple heuristic: first message contains both answers
-      session.availability = session.availability || messageText;
-      session.accommodation_needed = session.accommodation_needed || messageText;
+      logWithEmoji("🧠", "log", `[QUALIFICATION] Parsing answers with AI for [...${session.phone?.slice(-4)}]`);
 
-      logWithEmoji("📋", "log", `[QUALIFICATION] Answers received for [...${session.phone?.slice(-4)}]`);
+      try {
+        const openai = new OpenAIExtended(process.env.OPENAI_API_KEY);
+
+        const QualificationSchema = z.object({
+          availability: z.string().describe("Când poate începe candidatul (ex: 'Imediat', 'De luni', 'De la 1 Mai'). Dacă lipsește complet informația, returnează null."),
+          accommodation: z.string().describe("Ce detalii a oferit despre cazare (ex: 'Am locuință proprie', 'Am nevoie de cazare'). Dacă lipsește complet, returnează null."),
+          user_sentiment: z.string().describe("Sentimentul general al candidatului din contextul mesajelor sale (ex: 'Pozitiv, dornic de muncă', 'Grăbit', 'Neutru').")
+        });
+
+        // Prompt the AI to extract these fields from the simple text
+        const response = await openai.parseStructured({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content: `You are an AI assistant helping a recruiter. Extract the logistics data and candidate sentiment from the chat message.\n\nIMPORTANT: You MUST return ONLY a raw JSON object with exactly these 3 keys:\n- "availability" (string or null)\n- "accommodation" (string or null)\n- "user_sentiment" (string).`
+            },
+            {
+              role: "user",
+              content: `MESAJE ANTERIOARE PENTRU CONTEXT:\n- Botul a întrebat: "Când poți începe?" și "Ai nevoie de cazare?"\n\nRĂSPUNSUL CANDIDATULUI: "${messageText}"\n\nExtrage toate argumentele folosind Limba Română. Dedul din context sau asignează null doar dacă lipsa e absolută.`
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "QualificationInfo",
+              schema: QualificationSchema,
+              strict: true
+            }
+          },
+          temperature: 0
+        });
+
+        const extracted = response as any;
+
+        session.availability = extracted.availability || messageText; // fallback if null
+        session.accommodation_needed = extracted.accommodation || messageText; // fallback if null
+        session.user_sentiment = extracted.user_sentiment || "Neutru";
+
+        logWithEmoji("✅", "log", `[QUALIFICATION] Parsed successfully: ${session.availability} | ${session.accommodation_needed} | Sentiment: ${session.user_sentiment}`);
+
+      } catch (aiError) {
+        logWithEmoji("⚠️", "warn", `AI Qualification Parsing failed. Using raw fallback.`, aiError);
+        session.availability = session.availability || messageText;
+        session.accommodation_needed = session.accommodation_needed || messageText;
+        session.user_sentiment = "Necunoscut";
+      }
 
       // Run job matching
+      session.stage = "waiting_candidate_note";
+
+      // Trimitere către următoarea etapă: Cererea unei note din partea candidatului (Opțional)
+      await sendWhatsAppMessage(from, BotMessages.candidateNoteRequest);
+      saveSessions(sessions);
+      return;
+    }
+
+    // ============================================
+    // STEP 3.5: CANDIDATE NOTE STAGE (NEW)
+    // Asking if candidate wants to add a note
+    // ============================================
+
+    if (session.stage === "waiting_candidate_note" && messageText) {
+      const answer = await analyzeIntentAI(messageText, "Dorința de a lăsa o notă personală (Dorești să lași o notă HR-ului? Sau scrie NU)");
+
+      if (answer === "NO") {
+        logWithEmoji("📝", "log", `[CANDIDATE NOTE] User declined to add note`);
+        session.candidate_note = "";
+      } else {
+        logWithEmoji("📝", "log", `[CANDIDATE NOTE] Note added`);
+        session.candidate_note = messageText;
+      }
+
+      // Trecem la cererea de dispatch
       session.stage = "waiting_dispatch_consent";
+
+      const name = session.nume || "Candidat";
 
       try {
         // Get jobs for this client (mock data → replace with Google Sheets in production)
@@ -695,31 +759,41 @@ async function handleUserMessage(
         session.matched_job_ids = topMatches.map((m: any) => m.jobId);
 
         if (topMatches.length > 0) {
-          const jobsListText = buildJobMatchMessage(topMatches);
-          const name = session.nume || "Candidat";
-          const availability = session.availability || "(nespecificat)";
-          const accommodation = session.accommodation_needed || "(nespecificat)";
-
           await sendWhatsAppMessage(
             from,
-            BotMessages.jobMatchesFound(name, jobsListText, availability, accommodation)
+            `🚀 Am verificat baza noastră de joburi active, ${name}! Iată cele mai bune potriviri:`
           );
+
+          // SEGMENTED JOB DISPLAY (1 WhatsApp Message per Job)
+          for (let i = 0; i < Math.min(topMatches.length, 3); i++) {
+            const match = topMatches[i];
+            const medal = i === 0 ? "🥇" : i === 1 ? "🥈" : "🥉";
+            const jobMsg = `${medal} ${match.jobTitle} — ${match.city}\n💰 ${(match as any).salary || "Salariu negociabil"}\n📊 Potrivire: ${match.matchScore}%\n💡 ${match.matchReasoning}`;
+
+            await sendWhatsAppMessage(from, jobMsg);
+          }
         } else {
           // No matches found
           session.stage = "completed";
-          await sendWhatsAppMessage(from, BotMessages.noJobsFound(session.nume || "Candidat"));
+          await sendWhatsAppMessage(from, BotMessages.noJobsFound(name));
+          saveSessions(sessions);
+          return;
         }
 
       } catch (matchError) {
         logWithEmoji("❌", "error", `[MATCHING] Error:`, matchError);
-        // Fallback: continue to dispatch anyway
-        await sendWhatsAppMessage(from, BotMessages.jobMatchesFound(
-          session.nume || "Candidat",
-          "🔄 Se procesează matching-ul...",
-          session.availability || "(nespecificat)",
-          session.accommodation_needed || "(nespecificat)"
-        ));
+        await sendWhatsAppMessage(from, `🔄 Am întâmpinat o eroare la calcularea joburilor, dar profilul tău a fost preluat.`);
       }
+
+      const availability = session.availability || "(nespecificat)";
+      const accommodation = session.accommodation_needed || "(nespecificat)";
+      const note = session.candidate_note || "";
+
+      // Send Final Summary & Dispatch Consent Request
+      await sendWhatsAppMessage(
+        from,
+        BotMessages.dispatchConsentRequest(name, availability, accommodation, note)
+      );
 
       saveSessions(sessions);
       return;
@@ -731,7 +805,7 @@ async function handleUserMessage(
     // ============================================
 
     if (session.stage === "waiting_dispatch_consent" && messageText) {
-      const answer = normalizeConsent(messageText);
+      const answer = await analyzeIntentAI(messageText, "Consimțământ GDPR transfer date către echipă (Ești de acord să trimitem dosarul?)");
 
       if (answer === "YES") {
         // GDPR COMPLIANCE: Record explicit consent timestamp before any data transfer
@@ -806,7 +880,7 @@ async function handleUserMessage(
 
     if (hasCvData && session.stage === "collecting_data" && !mediaMetadata) {
       // Text message after CV read - check if it's a confirmation ("da, e corect")
-      const confirmation = normalizeConsent(messageText);
+      const confirmation = await analyzeIntentAI(messageText, "Confirmare date extrase din CV (Datele sunt corecte?)");
 
       if (confirmation === "YES") {
         // Move to qualification stage
@@ -821,14 +895,16 @@ async function handleUserMessage(
         await sendWhatsAppMessage(from, "Înțeleg. Te rog corectează datele pe care le consideri greșite sau rescrie-le. 📝");
         saveSessions(sessions);
         return;
+      } else {
+        // CONVERSATIONAL GUARDRAIL: Dacă spune orice altceva, îi reamintim să confirme CV-ul.
+        logWithEmoji("⏳", "log", `[GUARDRAIL] Unclear confirmation response from user`);
+        await sendWhatsAppMessage(from, `Ca să putem continua, te rog confirmă dacă datele extrase din CV sunt corecte (scrie doar "DA" sau "NU"). Aceasta e important ca să îți creez un profil solid! 🙏`);
+        return;
       }
     }
 
-    // Move to qualification automatically after CV is read (mediaMetadata path)
-    if (hasCvData && session.stage === "collecting_data" && mediaMetadata) {
-      session.stage = "waiting_qualification";
-      // cvFeedback message was already sent above - qualification message is next interaction
-    }
+    // Șters tranziția automată: `if (hasCvData && session.stage === "collecting_data" && mediaMetadata)`
+    // Bot-ul NU va mai trece singur în `waiting_qualification`. Va aștepta exclusiv confirmarea manuală de mai sus.
 
     // ============================================
     // STEP 6: Save session

@@ -48,16 +48,21 @@ export const BotMessages = {
     qualificationQuestions: (name: string) =>
         `Excelent, ${name}! 🎯 Pe baza CV-ului tău, am identificat câteva poziții care s-ar potrivi perfect experienței tale.\n\nÎnainte să îți trimit matching-ul complet, am nevoie de două detalii logistice esențiale:\n\n📅 1. Când este cea mai apropiată dată la care poți începe un nou job?\n   (Scrie: "Imediat", "Preaviz 2 săptămâni", sau data exactă)\n\n🏠 2. Ai nevoie de cazare oferită de agenție sau ai locuință proprie în zonă?\n   (Scrie: "Da, cazare" sau "Nu, am locuință")\n\nRăspunde la ambele întrebări și continuăm! 👇`,
 
+    // 11. Cerere Notă Candidat (înainte de transfer)
+    candidateNoteRequest: `Înainte de a trimite dosarul, dorești să adaugi o scurtă notă pentru recrutor? 📝\n\n(Ex: ce ture preferi, detalii despre transport, dacă ai mașină personală etc.)\n\nScrie mesajul tău mai jos sau răspunde cu "NU" dacă totul e în regulă.`,
+
     // ============================================
     // ETAPA: DISPATCH CONSENT (Stage: waiting_dispatch_consent)
     // Prezentare joburi + consimțământ GDPR transfer date
     // ============================================
 
-    // 11. Prezentare joburi potrivite + cerere consimțământ transfer
-    jobMatchesFound: (name: string, jobsList: string, availability: string, accommodation: string) =>
-        `🚀 Am verificat baza noastră de joburi active, ${name}!\n\n${jobsList}\n\n📋 Profilul tău:\n• Disponibilitate: ${availability}\n• Cazare: ${accommodation}\n\n─────────────────────\n⚖️ TRANSFER DATE (GDPR Art. 44)\nPentru a trimite dosarul tău către Departamentul de Recrutare, am nevoie de consimțământul tău explicit.\n\nEști de acord să trimitem profilul tău complet (fără CV original) echipei noastre de recruteri? (DA/NU)`,
+    // 12. Prezentare joburi potrivite + cerere consimțământ transfer
+    dispatchConsentRequest: (name: string, availability: string, accommodation: string, candidateNote: string) => {
+        const noteSection = candidateNote ? `\n• Notă personală: ${candidateNote}` : '';
+        return `📋 Sumar profil (${name}):\n• Disponibilitate: ${availability}\n• Cazare: ${accommodation}${noteSection}\n\n─────────────────────\n⚖️ TRANSFER DATE (GDPR Art. 44)\nPentru a trimite dosarul tău către Departamentul de Recrutare, am nevoie de consimțământul tău explicit.\n\nEști de acord să trimitem profilul tău complet (fără CV original) echipei noastre de recruteri? (DA/NU)`;
+    },
 
-    // 12. Când nu se găsesc joburi potrivite
+    // 13. Când nu se găsesc joburi potrivite
     noJobsFound: (name: string) =>
         `${name}, am analizat profilul tău cu atenție, dar în acest moment nu avem poziții deschise care să se potrivească 100% cu experiența ta.\n\nVom păstra profilul tău în baza de date și te vom contacta de îndată ce apare o oportunitate potrivită.\n\nMulțumim pentru încredere! 🤝`,
 
@@ -66,10 +71,10 @@ export const BotMessages = {
     // Confirmare trimitere + așteptare recrutor
     // ============================================
 
-    // 13. Confirmare dispatch cu succes
+    // 14. Confirmare dispatch cu succes
     dispatchConfirmed: (name: string, agencyName: string) =>
         `✅ Gata, ${name}! Dosarul tău a fost trimis cu prioritate către echipa de recrutare ${agencyName}.\n\n📞 Un consultant de recrutare va analiza profilul tău și te va contacta direct pe acest număr de WhatsApp în maxim 24 de ore pentru a discuta detaliile.\n\n🔐 Datele tale sunt protejate conform GDPR. Ai consimțit la transferul datelor în data de astăzi și poți retrage consimțământul oricând.\n\nSucces, ${name}! O zi excelentă! 🌟`,
 
-    // 14. Dacă user refuză dispatch
+    // 15. Dacă user refuză dispatch
     dispatchRefused: `Înțeleg perfect. Profilul tău rămâne în siguranță la noi și nu va fi trimis nicăieri fără acordul tău.\n\nDacă te răzgândești, scrie oricând "DA" pentru a relua procesul. 🤝`,
 };

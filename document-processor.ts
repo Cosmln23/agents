@@ -529,7 +529,7 @@ function downloadFileWithSizeLimit(
 
     file.on("error", (error) => {
       clearTimeout(timeout);
-      fs.unlink(filePath, () => {}); // Clean up
+      fs.unlink(filePath, () => { }); // Clean up
       reject(error);
     });
   });
@@ -605,14 +605,14 @@ async function extractDataFromDocument(
 
     // Step 5: LOG - GDPR COMPLIANT (no personal data in logs)
     const fieldsFound = [
-      extracted.nume_candidat     ? "name" : null,
+      extracted.nume_candidat ? "name" : null,
       extracted.domeniu_activitate ? "domain" : null,
       extracted.experienta_recenta ? "recent_role" : null,
-      extracted.mobilitate         ? "mobility" : null,
-      extracted.education          ? "education" : null,
+      extracted.mobilitate ? "mobility" : null,
+      extracted.education ? "education" : null,
       extracted.experience_summary ? "experience" : null,
       (extracted.hard_skills?.length ?? 0) > 0 ? `skills(${extracted.hard_skills!.length})` : null,
-      extracted.language_level     ? `lang(${extracted.language_level})` : null,
+      extracted.language_level ? `lang(${extracted.language_level})` : null,
     ].filter(Boolean);
     console.log(`   ✅ [Extraction] data flattened and validated for user [${session.phone.slice(-4)}]`);
     console.log(`      Fields found: ${fieldsFound.join(", ") || "(none)"}`);
@@ -686,14 +686,14 @@ You MUST IGNORE and NOT EXTRACT:
 - ❌ Candidate's photograph
 - ❌ Social media profiles/personal links
 
-✅ EXTRACT ONLY (Job-Relevant):
+✅ EXTRACT ONLY (Job-Relevant & Global Attributes):
 - 👤 Name (nume_candidat): Candidate's full name.
 - 🏢 Industry (domeniu_activitate): Main field of activity/industry.
 - 💼 Recent Experience (experienta_recenta): Most recent job title and company.
 - 🌍 Mobility (mobilitate): Countries or locations where the candidate has worked.
 - 📚 Education: Level (high school, college, university) and specialization/field
 - 💼 Professional Experience: Job titles, companies, duration (years/months)
-- 🛠️ Hard Skills: Technical tools, software, certifications mentioned
+- 🛠️ Hard Skills & Global Attributes: MUST extract driving licenses (e.g., 'Permis Categoria B', 'Driver License B'), certifications (e.g., VCA, Forklift/EPT), software/tools. These are GLOBAL and apply to the whole profile.
 - 🌍 Languages: Language names and proficiency levels (A1-C2, fluent, basic, etc.)
 
 EXTRACTION NOTES:
@@ -747,7 +747,7 @@ Negeer en extract NIET:
 - ❌ Foto
 - ❌ Persoonlijke links
 
-✅ EXTRACT ALLEEN (Werkgerelateerd):
+✅ EXTRACT ONLY (Job-Relevant & Global Attributes):
 - 👤 Naam (nume_candidat): Volledige naam van kandidaat.
 - 🏢 Industrie (domeniu_activitate): Hoofdsector.
 - 💼 Recente ervaring (experienta_recenta): Meest recente functie en bedrijf.

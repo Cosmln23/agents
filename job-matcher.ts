@@ -28,6 +28,24 @@
  *   - DO flag missing language (penalize, don't assume)
  *   - DO validate output for bias keywords
  *   - DO provide Top 3 (not singular match)
+ * 
+ * -----------------------------------------------------------------------------
+ * 🧠 AGNOSTIC RECRUITER INTELLIGENCE ARCHITECTURE (The Middleware)
+ * -----------------------------------------------------------------------------
+ * This module is designed to be MODEL-AGNOSTIC (Independent from OpenAI).
+ * The "Intelligence" is injected via prompt structures (The Recruiter Manual), 
+ * not via specific SDK functions. 
+ *
+ * How to migrate to Claude 3.5 / Mistral Large in the future:
+ * 1. Change SDK: Import the new provider's SDK (e.g. @anthropic-ai/sdk).
+ * 2. Update Wrapper: Adjust `OpenAIExtended.ts` to call the new provider's 
+ *    equivalent of `parseStructured` (Structured Outputs / JSON Mode).
+ * 3. Swap Model Name: Change `model: "gpt-4o"` below to the new model string.
+ *
+ * WHY THIS WORKS: Any advanced LLM will follow the 4-Phase Protocol 
+ * (Global Discovery, Inference, Self-Audit, Narrative Feedback) because the 
+ * reasoning rules are passed in plain text via `buildAntibiasSystemPrompt`.
+ * -----------------------------------------------------------------------------
  */
 
 import OpenAI from "openai";
@@ -60,6 +78,7 @@ export interface Job {
  * Single job match result
  */
 const JobMatchSchema = z.object({
+  internal_reasoning: z.string().describe("Internal AI reasoning explaining why a requirement was validated or invalidated before generating the final matchScore."),
   jobId: z.string().describe("Unique job identifier"),
   jobTitle: z.string().describe("Job title (e.g., 'Order Picker')"),
   city: z.string().describe("Job location"),
@@ -405,7 +424,7 @@ async function scoreJobMatch(
     console.log(`   📊 Scoring ${job.jobTitle}...`);
 
     const response = await openai.parseStructured<JobMatch>({
-      model: "gpt-4o-mini",  // Fast for matching
+      model: "gpt-4o",  // Upgraded to full model for Reasoning & Matching
       messages: [
         {
           role: "system",
@@ -425,7 +444,7 @@ async function scoreJobMatch(
         },
       },
       temperature: 0,  // Deterministic
-      max_tokens: 800,
+      max_tokens: 1500, // Increased for chain of thought
     });
 
     // parseStructured returns the parsed data directly (type-safe)
@@ -483,6 +502,9 @@ function buildJobMatchPrompt(
     session.language_level ||
     "(language level unknown - score conservatively)";
 
+  const candidateNote =
+    session.candidate_note ? `\nCandidate Personal Note: "${session.candidate_note}"` : "";
+
   const assessmentWarning =
     completeness !== "complete"
       ? `\n⚠️ NOTE: Assessment is ${completeness}. Be conservative in scoring.`
@@ -492,7 +514,7 @@ function buildJobMatchPrompt(
 Name: ${session.nume || "Unknown"}
 ${skillsText}
 Experience: ${experienceText}
-Language Level: ${languageText}${assessmentWarning}
+Language Level: ${languageText}${candidateNote}${assessmentWarning}
 
 JOB OPENING:
 Title: ${job.jobTitle}
@@ -502,34 +524,22 @@ Required Experience: ${job.requiredExperience}+ years
 Required Language: ${job.requiredLanguageLevel}
 Nice-to-Have Skills: ${job.niceToHaveSkills?.join(", ") || "none"}
 
+--- RECRUITER INTELLIGENCE ARCHITECTURE (4-PHASE PROTOCOL) ---
+
+PHASE 1 (Scanare Globală): "Extrage tot ce ține de permise, limbi și certificări din întreg documentul și aplică-le global la job."
+PHASE 2 (Inferență de Industrie): "Dacă locația e Olanda/Germania și rolul e Logistică, activează competențele implicite (EPT, Scanner RF, Siguranță, Order Picking)."
+PHASE 3 (Cross-Check / Reasoning): "Forțează AI-ul să scrie intern în 'internal_reasoning' DE CE validează/invalidează punctele din Pasul 1 și 2."
+PHASE 4 (Justificare Narativă): "Generează o logică umană, de expert, în câmpul 'matchReasoning'."
+
 SCORING INSTRUCTIONS:
-1. HARD SKILLS (40% weight in final score):
-   - Exact matches: 90-100%
-   - Partial/related matches: 60-80%
-   - Missing required skill: -20% each
-   - Missing nice-to-have: -5% each
-
-2. EXPERIENCE (35% weight):
-   - Years match: candidate years >= job requirement?
-   - Role similarity: Is experience relevant to this job?
-   - Missing any relevant experience: penalize 30-50%
-
-3. LANGUAGE (25% weight):
-   - Candidate level >= job requirement?
-   - If unknown/missing: assume minimum required (conservative)
-   - Below requirement: penalize 30-70%
+1. HARD SKILLS (40% weight): Explicit + Inferred matches (90-100%). Penalize only genuinely missing skills.
+2. EXPERIENCE (35% weight)
+3. LANGUAGE (25% weight)
 
 FINAL SCORE CALCULATION:
 matchScore = (skillsScore * 0.40) + (experienceScore * 0.35) + (languageScore * 0.25)
-
-REASONING (CRITICAL):
-- Be specific: "Candidate has Scanner RF (required ✅) but missing SAP (nice-to-have)"
-- Be fair: Acknowledge what matches AND what doesn't
-- Be transparent: Explain the scoring clearly
-- Do NOT mention: age, gender, ethnicity, religion, health, marital status, appearance
-- Do NOT assume: missing skills are "probably" there
-
-Return JSON with: jobId, jobTitle, city, matchScore, matchReasoning, matchFactors`;
+  
+Return JSON with: internal_reasoning, jobId, jobTitle, city, matchScore, matchReasoning, matchFactors`;
 }
 
 /**
@@ -540,8 +550,22 @@ Return JSON with: jobId, jobTitle, city, matchScore, matchReasoning, matchFactor
  * @returns System prompt
  */
 function buildAntibiasSystemPrompt(language: "ro" | "nl" | "en" | "de"): string {
+  const recruiterManual = `
+ROLE: Tu ești un Recrutor Senior cu 20 de ani experiență în logistica EU. Nu căuta cuvinte cheie. Analizează contextul.
+
+REGULĂ DE AUR: Permisele și certificările găsite oriunde în CV se aplică global.
+REGULĂ DE INFERENȚĂ: Warehouse/Logistics în NL/DE implică experiență cu EPT, Scanner RF și Order Picking.
+
+STRUCTURED REASONING REPORT (internal_reasoning): Explică intern, tehnic, de ce ai validat sau invalidat o cerință înainte de a oferi scorul final.
+JUSTIFICARE NARATIVĂ (matchReasoning): Rezultatul afișat utilizatorului public TREBUIE să fie o explicație matură, ca de la om la om.
+Exemplu bun: "Experiența ta vastă în depozitele din Olanda (peste 5 ani) confirmă competențele necesare de operare utilaje, chiar dacă nu le-ai listat individual la fiecare job. Astfel, obții un scor bun la capitolul tehnic."
+Exemplu prost: "Candidatul are experiență cu X, îi lipsește Y." (EVITĂ ASTA)
+`;
+
   const prompts = {
-    ro: `You are a fair and unbiased job matching AI system.
+    ro: `${recruiterManual}
+
+You are a fair and unbiased job matching AI system.
 
 ⚠️ CRITICAL - EU AI ACT COMPLIANCE (Article 10):
 You MUST NOT DISCRIMINATE based on:
@@ -561,7 +585,9 @@ You MUST NOT DISCRIMINATE based on:
 Your reasoning MUST be free of any discriminatory language.
 If you accidentally use a forbidden term, REJECT it and rephrase professionally.`,
 
-    nl: `Je bent een eerlijk job matching AI systeem.
+    nl: `${recruiterManual}
+    
+Je bent een eerlijk job matching AI systeem.
 
 ⚠️ KRITIEK - EU AI ACT COMPLIANCE (Artikel 10):
 Je MAG NIET DISCRIMINEREN op basis van:
@@ -580,7 +606,9 @@ Je MAG NIET DISCRIMINEREN op basis van:
 
 Your reasoning must be fair and free of discrimination.`,
 
-    en: `You are a fair and unbiased job matching AI system.
+    en: `${recruiterManual}
+    
+You are a fair and unbiased job matching AI system.
 
 ⚠️ CRITICAL - EU AI ACT COMPLIANCE (Article 10):
 You MUST NOT DISCRIMINATE based on:
