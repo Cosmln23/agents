@@ -60,8 +60,8 @@ import {
 // Mock Jobs Data (Test data - replace with Google Sheets in production)
 import { MOCK_JOBS_BY_CLIENT } from "./data/jobs-mock";
 
-// Email via nodemailer
-import nodemailer from "nodemailer";
+// Email via Resend (configured in .env: RESEND_API_KEY, RESEND_FROM_EMAIL)
+import { Resend } from "resend";
 
 // Messages Configuration (Enterprise-Ready)
 import { BotMessages } from "./config/messages.config";
@@ -428,16 +428,8 @@ GDPR & COMPLIANCE AUDIT TRAIL
 Mesaj generat automat de Recrutare AI Bot
     `.trim();
 
-    // Send email via nodemailer (SMTP - configure in .env)
-    const transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || "smtp.gmail.com",
-      port: parseInt(process.env.SMTP_PORT || "587"),
-      secure: false,
-      auth: {
-        user: process.env.SMTP_USER || process.env.NOTIFICATION_EMAIL,
-        pass: process.env.SMTP_PASS,
-      },
-    });
+    // Send email via Resend (API key configured in .env: RESEND_API_KEY)
+    const resend = new Resend(process.env.RESEND_API_KEY);
 
     const recipientEmail = clientConfig.notificationEmail || process.env.NOTIFICATION_EMAIL || "";
 
@@ -446,8 +438,8 @@ Mesaj generat automat de Recrutare AI Bot
       return false;
     }
 
-    await transporter.sendMail({
-      from: `"Recrutare AI Bot" <${process.env.SMTP_USER || process.env.NOTIFICATION_EMAIL}>`,
+    await resend.emails.send({
+      from: process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev",
       to: recipientEmail,
       subject: `[CANDIDAT NOU] ${session.nume || "Candidat"} — ${session.domeniu_activitate || "Logistică"} — ${clientConfig.agencyName}`,
       text: emailBody,
