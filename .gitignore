@@ -23,10 +23,15 @@ Thumbs.db
 *.swo
 *~
 
-# Build artifacts
+# Build artifacts (TypeScript compiled output)
 dist/
 build/
 *.tsbuildinfo
+*.js
+*.js.map
+*.d.ts
+*.d.ts.map
+!jest.config.js
 
 # Temporary files
 .tmp/

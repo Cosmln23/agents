@@ -5,6 +5,48 @@
 
 ---
 
+## CE FACE BOTUL - PE SCURT (pentru oricine)
+
+Când un candidat trimite un **PDF cu CV-ul** pe WhatsApp:
+
+1. **Botul primește mesajul** de la Meta (WhatsApp Business API)
+2. **Descarcă PDF-ul** temporar pe server (in folderul /tmp/)
+3. **Convertește PDF-ul** într-un format pe care AI-ul îl poate citi (base64)
+4. **Trimite PDF-ul la GPT-4o** (inteligența artificială de la OpenAI) care **citește CV-ul** și extrage:
+   - Ce studii are candidatul
+   - Unde a lucrat și ce funcții a avut
+   - Ce abilități tehnice are (software, unelte, certificări)
+   - Ce limbi vorbește și la ce nivel
+5. **Verifică datele** - dacă AI-ul a inventat ceva (halucinare), le marchează ca suspecte
+6. **Șterge PDF-ul** de pe server imediat (conform GDPR - protecția datelor)
+7. **Trimite confirmare** candidatului pe WhatsApp: "Am citit CV-ul tău!"
+
+**Totul se întâmplă într-un singur pas, fără intermediari.**
+Înainte erau 2 apeluri API separate (upload + citire) - acum e doar 1.
+
+---
+
+## CE ÎNSEAMNĂ FIȘIERELE DIN PROIECT
+
+| Fișier | Ce face |
+|--------|---------|
+| `app.ts` | Serverul principal - primește mesajele de pe WhatsApp, le procesează, trimite răspunsuri |
+| `document-processor.ts` | Procesează CV-urile - descarcă, convertește, trimite la AI, validează, șterge |
+| `types/OpenAIExtended.ts` | Conectarea cu OpenAI (GPT-4o) - trimite cereri, primește răspunsuri |
+| `types/UserSession.ts` | Structura datelor pentru fiecare candidat (ce știm despre el) |
+| `types/ClientConfig.ts` | Configurația pentru fiecare client/firmă care folosește botul |
+| `config/clients.ts` | Lista firmelor care folosesc botul (multi-tenant) |
+| `data-extractor.ts` | Extrage date din mesajele text (nu din documente) |
+| `prompt-generator.ts` | Generează întrebările pe care botul le pune candidaților |
+| `job-matcher.ts` | Potrivește candidații cu job-urile disponibile |
+| `schemas/zod-schemas.ts` | Reguli de validare a datelor (Zod = librărie de validare) |
+
+---
+
+## DETALII TEHNICE (pentru programatori)
+
+---
+
 ## FASE 1 - OpenAI SDK Refactor (Feb 20, 2026)
 
 ### 1.1 types/OpenAIExtended.ts - Beta API Removal
