@@ -323,6 +323,75 @@ async function sendWhatsAppMessage(toPhone: string, text: string): Promise<void>
 }
 
 // ============================================
+// TEXT NORMALIZATION - Intent-Based Input Processing
+// ============================================
+
+/**
+ * Normalize user input to detect intent (DA/NU/YES/NO variations)
+ * Handles natural language variations like "Da, sunt de acord", "DA!!!", "yes please", etc.
+ *
+ * GDPR COMPLIANCE: Users should speak naturally, not follow strict "formulas".
+ * This function makes the bot feel human-friendly while remaining strict on consent logic.
+ *
+ * @param text - Raw user input
+ * @returns "YES" | "NO" | "UNCLEAR"
+ *
+ * @examples
+ *   "Da ,, imi dau acordul" → "YES"
+ *   "da.este corect" → "YES"
+ *   "DA!!!" → "YES"
+ *   "yes please" → "YES"
+ *   "Nu, prefer nu" → "NO"
+ *   "nu-mi dau acordul" → "NO"
+ *   "hmm, nu stiu" → "UNCLEAR"
+ */
+function normalizeConsent(text: string): "YES" | "NO" | "UNCLEAR" {
+  if (!text) return "UNCLEAR";
+
+  // Step 1: Clean text - lowercase, remove diacritics, trim
+  let cleaned = text
+    .toLowerCase()
+    .trim()
+    // Remove diacritics (ă→a, ș→s, ț→t, etc.)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    // Remove punctuation/special chars but keep spaces
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  // Step 2: Check for YES patterns
+  const yesPatterns = [
+    /^da\b/,           // starts with "da"
+    /\byes\b/,         // contains "yes"
+    /\bacord/,         // contains "acord"
+    /\baccept/,        // contains "accept"
+    /\bconfirm/,       // contains "confirm"
+    /\bstiu\b/,        // "stiu" (I agree in casual Romanian)
+    /\bde\s+acord/,    // "de acord" (I agree)
+  ];
+
+  for (const pattern of yesPatterns) {
+    if (pattern.test(cleaned)) return "YES";
+  }
+
+  // Step 3: Check for NO patterns
+  const noPatterns = [
+    /^nu\b/,           // starts with "nu"
+    /\bno\b/,          // contains "no"
+    /\brefuz/,         // contains "refuz"
+    /\bdeclin/,        // contains "declin"
+    /\bnu\s+sunt/,     // "nu sunt" (I'm not)
+  ];
+
+  for (const pattern of noPatterns) {
+    if (pattern.test(cleaned)) return "NO";
+  }
+
+  return "UNCLEAR";
+}
+
+// ============================================
 // JOB MATCH MESSAGE BUILDER
 // ============================================
 
@@ -501,23 +570,27 @@ async function handleUserMessage(
   try {
     // 🔐 CHECK GDPR CONSENT STATUS
     if (!session.consent_given) {
-      const messageText = messageData?.text?.body?.trim().toUpperCase() || "";
+      const messageText = messageData?.text?.body || "";
+      const consent = normalizeConsent(messageText);
 
-      if (messageText === "DA" || messageText === "YES") {
+      if (consent === "YES") {
         session.consent_given = true;
         session.ai_disclosure_acknowledged = true;
         session.stage = "collecting_data";
+        logWithEmoji("✅", "log", `[GDPR] Consent given by ${from} (raw: "${messageText.substring(0, 30)}")`);
         // [MODIFICAT AICI] Pasul 2: Momentul de "Prezentare" cu opțiuni (CV sau text)
         await sendWhatsAppMessage(from, BotMessages.presentationOptions);
         saveSessions(sessions);
         return;
-      } else if (messageText === "NU" || messageText === "NO") {
+      } else if (consent === "NO") {
         session.stage = "completed";
+        logWithEmoji("🚫", "log", `[GDPR] Consent REFUSED by ${from}`);
         await sendWhatsAppMessage(from, BotMessages.consentRejected);
         saveSessions(sessions);
         return;
       } else {
-        // User hasn't responded to consent yet
+        // User hasn't responded clearly to consent yet - be patient
+        logWithEmoji("⏳", "log", `[GDPR] Unclear response, prompting again`);
         await sendWhatsAppMessage(from, BotMessages.promptConsent);
         return;
       }
@@ -658,9 +731,9 @@ async function handleUserMessage(
     // ============================================
 
     if (session.stage === "waiting_dispatch_consent" && messageText) {
-      const answer = messageText.trim().toUpperCase();
+      const answer = normalizeConsent(messageText);
 
-      if (answer === "DA" || answer === "YES") {
+      if (answer === "YES") {
         // GDPR COMPLIANCE: Record explicit consent timestamp before any data transfer
         // Legal basis: GDPR Article 7 - consent must be recorded with timestamp
         session.dispatch_consent_timestamp = Date.now();
@@ -706,13 +779,14 @@ async function handleUserMessage(
           await sendWhatsAppMessage(from, "⚠️ A apărut o problemă tehnică la trimiterea dosarului. Te rog scrie din nou DA pentru a reîncerca.");
         }
 
-      } else if (answer === "NU" || answer === "NO") {
+      } else if (answer === "NO") {
         logWithEmoji("🚫", "log", `[DISPATCH] Consent refused for [...${session.phone?.slice(-4)}]`);
         await sendWhatsAppMessage(from, BotMessages.dispatchRefused);
         // Keep stage as waiting_dispatch_consent - they can change mind later
 
       } else {
-        // User wrote something else - remind them
+        // User wrote something unclear - remind them
+        logWithEmoji("⏳", "log", `[DISPATCH] Unclear response, re-prompting`);
         await sendWhatsAppMessage(from, `Te rog răspunde cu "DA" pentru a trimite dosarul, sau "NU" dacă preferi să nu îl trimitem. 🙏`);
       }
 
@@ -732,17 +806,19 @@ async function handleUserMessage(
 
     if (hasCvData && session.stage === "collecting_data" && !mediaMetadata) {
       // Text message after CV read - check if it's a confirmation ("da, e corect")
-      const isConfirmation = messageText && (
-        messageText.toLowerCase().includes("da") ||
-        messageText.toLowerCase().includes("corect") ||
-        messageText.toLowerCase().includes("yes")
-      );
+      const confirmation = normalizeConsent(messageText);
 
-      if (isConfirmation) {
+      if (confirmation === "YES") {
         // Move to qualification stage
         session.stage = "waiting_qualification";
         const name = session.nume || "Candidat";
+        logWithEmoji("✅", "log", `[CV CONFIRM] User confirmed CV data is correct`);
         await sendWhatsAppMessage(from, BotMessages.qualificationQuestions(name));
+        saveSessions(sessions);
+        return;
+      } else if (confirmation === "NO") {
+        // User says CV data is wrong - ask to correct
+        await sendWhatsAppMessage(from, "Înțeleg. Te rog corectează datele pe care le consideri greșite sau rescrie-le. 📝");
         saveSessions(sessions);
         return;
       }
