@@ -101,6 +101,10 @@ interface DocumentMetadata {
  * extraction_logic is REQUIRED to force AI to justify before generating
  */
 interface CVExtractionResult {
+  nume_candidat?: string | null;
+  domeniu_activitate?: string | null;
+  experienta_recenta?: string | null;
+  mobilitate?: string | null;
   education?: string | null;
   experience_summary?: string | null;
   hard_skills?: string[] | null;
@@ -111,126 +115,151 @@ interface CVExtractionResult {
   requires_human_review?: boolean; // Flag if confidence=100% but data seems suspicious
 }
 
+// ============================================
+// GLOBAL GUARDRAIL - Safe Extraction Layer
+// ============================================
+
 /**
- * Zod schema for CV extraction result
- * Allows partial extraction (all fields optional/nullable)
+ * Universal string normalizer - immune to any OpenAI output format.
+ * Handles: string | array | object | null | undefined
+ * No matter what GPT-4o returns, this converts it to a safe string or null.
+ *
+ * Examples:
+ *   "Transport Coordinator"          → "Transport Coordinator"
+ *   ["Romania", "Netherlands"]       → "Romania, Netherlands"
+ *   {"english": "B2"}                → '{"english":"B2"}'
+ *   null / undefined                 → null
+ */
+const toSafeString = (val: unknown): string | null => {
+  if (val === null || val === undefined) return null;
+  if (Array.isArray(val)) return val.join(", ");
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
+};
+
+/**
+ * Same as toSafeString but returns "" instead of null (for required fields).
+ */
+const toSafeStringRequired = (val: unknown): string => {
+  return toSafeString(val) ?? "";
+};
+
+/**
+ * Normalizes any input to a valid CEFR level (A1-C2) or null.
+ * Handles: exact codes, descriptors, objects like {"english": "B2"}, arrays.
+ */
+const toCEFRLevel = (val: unknown): string | null => {
+  if (val === null || val === undefined || val === "") return null;
+
+  // If object/array, extract string representation first
+  let str: string;
+  if (typeof val === "object") {
+    // Try to find a CEFR value inside the object values
+    const values = Object.values(val as Record<string, unknown>);
+    str = values.join(" ").toUpperCase();
+  } else if (Array.isArray(val)) {
+    str = (val as unknown[]).join(" ").toUpperCase();
+  } else {
+    str = String(val).trim().toUpperCase();
+  }
+
+  // Already a valid CEFR code
+  if (["A1", "A2", "B1", "B2", "C1", "C2"].includes(str)) return str;
+
+  // Map common descriptors → CEFR
+  if (str.includes("FLUENT") || str.includes("NATIVE") || str.includes("MOTHER")) return "C2";
+  if (str.includes("ADVANCED") || str.includes("PROFICIENT")) return "C1";
+  if (str.includes("UPPER-INTERMEDIATE") || str.includes("UPPER INTERMEDIATE")) return "B2";
+  if (str.includes("INTERMEDIATE") || str.includes("WORKING") || str.includes("CONVERSATIONAL")) return "B1";
+  if (str.includes("ELEMENTARY") || str.includes("BASIC")) return "A2";
+  if (str.includes("BEGINNER") || str.includes("MINIMAL")) return "A1";
+
+  // Check for CEFR code anywhere in string (e.g. "My level is B2")
+  const cefrMatch = str.match(/\b(A1|A2|B1|B2|C1|C2)\b/);
+  if (cefrMatch) return cefrMatch[1];
+
+  return null;
+};
+
+/**
+ * Zod schema for CV extraction result.
+ * Uses Global Guardrail (toSafeString) on ALL text fields.
+ * Immune to OpenAI returning arrays or objects instead of strings.
  */
 const CVExtractionSchema = z.object({
+  nume_candidat: z
+    .preprocess(toSafeString, z.string().nullable().optional())
+    .describe("Candidate's full name extracted from the CV. Return null if not found."),
+
+  domeniu_activitate: z
+    .preprocess(toSafeString, z.string().nullable().optional())
+    .describe("Main field of activity/industry (e.g., 'logistică', 'IT', 'vânzări'). Return null if not found."),
+
+  experienta_recenta: z
+    .preprocess(toSafeString, z.string().nullable().optional())
+    .describe("Most recent job title and company (e.g., 'Transport Coordinator la Pliti Dispo SRL'). Return null if not found."),
+
+  mobilitate: z
+    .preprocess(toSafeString, z.string().nullable().optional())
+    .describe("Countries or cities where the candidate has worked (e.g., 'Olanda, Germania și România'). Return null if not found."),
+
   education: z
-    .string()
-    .nullable()
-    .optional()
-    .describe(
-      "Education level and specialization extracted from CV (e.g., 'Liceu Tehnic - Mecanică'). Return null if not found."
-    ),
+    .preprocess(toSafeString, z.string().nullable().optional())
+    .describe("Education level and specialization (e.g., 'Liceu Tehnic - Mecanică'). Return null if not found."),
 
   experience_summary: z
-    .preprocess(
-      (value) => {
-        if (value === null || value === undefined) return null;
-        if (Array.isArray(value)) return value.join(", ");
-        if (typeof value === "object") return JSON.stringify(value);
-        return String(value);
-      },
-      z.string().nullable().optional()
-    )
-    .describe(
-      "Professional experience summary (e.g., '5 years at Emag as Order Picker'). Return null if not found or if text is unclear."
-    ),
+    .preprocess(toSafeString, z.string().nullable().optional())
+    .describe("Professional experience summary (e.g., '5 years at Emag as Order Picker'). Return null if not found."),
 
   hard_skills: z
-    .array(z.string())
-    .nullable()
-    .optional()
+    .preprocess(
+      (val) => {
+        if (val === null || val === undefined) return null;
+        if (Array.isArray(val)) return val.map(String);
+        if (typeof val === "string") return [val];
+        return null;
+      },
+      z.array(z.string()).nullable().optional()
+    )
     .describe("Technical skills found in CV (e.g., ['Scanner RF', 'SAP']). Return null if none found."),
 
   language_level: z
-    .preprocess(
-      // Normalize any input to valid CEFR level
-      (value) => {
-        if (value === null || value === undefined || value === "") {
-          return null;
-        }
-        const str = String(value).trim().toUpperCase();
-        // Already valid
-        if (["A1", "A2", "B1", "B2", "C1", "C2"].includes(str)) {
-          return str;
-        }
-        // Map descriptors to CEFR levels
-        if (
-          str.includes("FLUENT") ||
-          str.includes("NATIVE") ||
-          str.includes("MOTHER")
-        ) {
-          return "C2";
-        }
-        if (str.includes("ADVANCED") || str.includes("PROFICIENT")) {
-          return "C1";
-        }
-        if (
-          str.includes("UPPER-INTERMEDIATE") ||
-          str.includes("UPPER INTERMEDIATE")
-        ) {
-          return "B2";
-        }
-        if (
-          str.includes("INTERMEDIATE") ||
-          str.includes("WORKING") ||
-          str.includes("CONVERSATIONAL")
-        ) {
-          return "B1";
-        }
-        if (str.includes("ELEMENTARY") || str.includes("BASIC")) {
-          return "A2";
-        }
-        if (str.includes("BEGINNER") || str.includes("MINIMAL")) {
-          return "A1";
-        }
-        // Default fallback for unknown values - but now returns null instead!
-        return null;
-      },
-      z
-        .string()
-        .refine((val) => ["A1", "A2", "B1", "B2", "C1", "C2"].includes(val), {
-          message: "Must be one of: A1, A2, B1, B2, C1, C2",
-        })
-        .nullable()
-        .optional()
+    .preprocess(toCEFRLevel, z
+      .string()
+      .refine((val) => ["A1", "A2", "B1", "B2", "C1", "C2"].includes(val), {
+        message: "Must be one of: A1, A2, B1, B2, C1, C2",
+      })
+      .nullable()
+      .optional()
     )
-    .catch(null) // If validation fails, return null (NOT B1 default!)
+    .catch(null)
     .describe("Language proficiency level (CEFR: A1-C2). Auto-normalized from descriptors. Return null if not found."),
 
   extraction_confidence: z
-    .number()
-    .min(0)
-    .max(100)
-    .optional()
-    .describe("Confidence score (0-100) of extraction quality. Be honest: lower if text is unclear. NOT 100% if you guessed!"),
+    .preprocess(
+      (val) => {
+        if (val === null || val === undefined) return undefined;
+        const n = Number(val);
+        return isNaN(n) ? undefined : Math.min(100, Math.max(0, n));
+      },
+      z.number().min(0).max(100).optional()
+    )
+    .describe("Confidence score (0-100). NOT 100% if you guessed!"),
 
   extraction_notes: z
-    .string()
-    .nullable()
-    .optional()
-    .describe("Notes about extraction (e.g., 'Couldn't find experience', 'Text was blurry')"),
+    .preprocess(toSafeString, z.string().nullable().optional())
+    .describe("Notes about extraction (e.g., 'Couldn't find experience', 'Text was blurry')."),
 
   extraction_logic: z
-    .preprocess(
-      (value) => {
-        if (value === null || value === undefined) return "";
-        if (Array.isArray(value)) return value.join("; ");
-        if (typeof value === "object") return JSON.stringify(value);
-        return String(value);
-      },
-      z.string()
-    )
-    .describe(
-      "REQUIRED - CRITICAL: Explain exactly where you found each piece of data in the image. Example: 'Line 3-5: Education - Bachelor in Business. Line 7-10: Experience - 4 years at Company X as Manager. Line 12: Skills - Excel, SAP, Salesforce.' If you cannot point to a specific location, the field must be null."
-    ),
+    .preprocess(toSafeStringRequired, z.string())
+    .describe("REQUIRED: Explain exactly where you found each piece of data. If you cannot point to a specific location, the field must be null."),
 
   requires_human_review: z
-    .boolean()
-    .optional()
-    .describe("Flag if confidence=100% but data seems suspicious or generic (e.g., 'Software Developer at Tech Solutions' when that text is NOT visible in the image)"),
+    .preprocess(
+      (val) => (typeof val === "boolean" ? val : false),
+      z.boolean().optional()
+    )
+    .describe("Flag if data seems suspicious or was guessed."),
 });
 
 // ============================================
@@ -574,16 +603,22 @@ async function extractDataFromDocument(
     // Step 4: Response is already parsed (parseStructured returns typed data directly)
     const extracted = response as CVExtractionResult;
 
-    // Step 5: LOG EXTRACTED DATA
-    console.log(`   📊 Vision API returned:`);
-    console.log(`      - education: "${extracted.education || '(null)'}"`);
-    console.log(`      - experience_summary: "${extracted.experience_summary || '(null)'}"`);
-    console.log(`      - hard_skills: ${JSON.stringify(extracted.hard_skills || [])}`);
-    console.log(`      - language_level: "${extracted.language_level || '(null)'}"`);
-    console.log(`      - extraction_confidence: ${extracted.extraction_confidence || '(null)'}%`);
-    console.log(`      - extraction_logic: "${extracted.extraction_logic || '(missing)'}"`);
-    if (extracted.extraction_notes) {
-      console.log(`      - extraction_notes: "${extracted.extraction_notes}"`);
+    // Step 5: LOG - GDPR COMPLIANT (no personal data in logs)
+    const fieldsFound = [
+      extracted.nume_candidat     ? "name" : null,
+      extracted.domeniu_activitate ? "domain" : null,
+      extracted.experienta_recenta ? "recent_role" : null,
+      extracted.mobilitate         ? "mobility" : null,
+      extracted.education          ? "education" : null,
+      extracted.experience_summary ? "experience" : null,
+      (extracted.hard_skills?.length ?? 0) > 0 ? `skills(${extracted.hard_skills!.length})` : null,
+      extracted.language_level     ? `lang(${extracted.language_level})` : null,
+    ].filter(Boolean);
+    console.log(`   ✅ [Extraction] data flattened and validated for user [${session.phone.slice(-4)}]`);
+    console.log(`      Fields found: ${fieldsFound.join(", ") || "(none)"}`);
+    console.log(`      Confidence: ${extracted.extraction_confidence ?? "N/A"}%`);
+    if (extracted.requires_human_review) {
+      console.log(`      ⚠️ [HUMAN REVIEW REQUIRED]`);
     }
 
     // Step 6: CHECK FOR SUSPICIOUS DATA (Human Review Flag)
@@ -652,6 +687,10 @@ You MUST IGNORE and NOT EXTRACT:
 - ❌ Social media profiles/personal links
 
 ✅ EXTRACT ONLY (Job-Relevant):
+- 👤 Name (nume_candidat): Candidate's full name.
+- 🏢 Industry (domeniu_activitate): Main field of activity/industry.
+- 💼 Recent Experience (experienta_recenta): Most recent job title and company.
+- 🌍 Mobility (mobilitate): Countries or locations where the candidate has worked.
 - 📚 Education: Level (high school, college, university) and specialization/field
 - 💼 Professional Experience: Job titles, companies, duration (years/months)
 - 🛠️ Hard Skills: Technical tools, software, certifications mentioned
@@ -709,6 +748,10 @@ Negeer en extract NIET:
 - ❌ Persoonlijke links
 
 ✅ EXTRACT ALLEEN (Werkgerelateerd):
+- 👤 Naam (nume_candidat): Volledige naam van kandidaat.
+- 🏢 Industrie (domeniu_activitate): Hoofdsector.
+- 💼 Recente ervaring (experienta_recenta): Meest recente functie en bedrijf.
+- 🌍 Mobiliteit (mobilitate): Landen of steden waar de kandidaat heeft gewerkt.
 - 📚 Onderwijs: Niveau en specialisatie
 - 💼 Beroepservaring: Functies, bedrijven, duur
 - 🛠️ Vaardigheden: Tools, software, certificaten
@@ -732,6 +775,10 @@ You MUST IGNORE and NOT EXTRACT:
 - ❌ Personal links
 
 ✅ EXTRACT ONLY (Job-Relevant):
+- 👤 Name (nume_candidat): Candidate's full name.
+- 🏢 Industry (domeniu_activitate): Main field of activity/industry.
+- 💼 Recent Experience (experienta_recenta): Most recent job title and company.
+- 🌍 Mobility (mobilitate): Countries or locations where the candidate has worked.
 - 📚 Education: Level and specialization
 - 💼 Professional Experience: Titles, companies, duration
 - 🛠️ Hard Skills: Tools, software, certifications
@@ -755,6 +802,10 @@ Ignoriere und extrahiere NICHT:
 - ❌ Persönliche Links
 
 ✅ EXTRAHIERE NUR (Jobspezifisch):
+- 👤 Name (nume_candidat): Vollständiger Name des Kandidaten.
+- 🏢 Branche (domeniu_activitate): Haupttätigkeitsfeld.
+- 💼 Aktuelle Erfahrung (experienta_recenta): Letzte Position und Firma.
+- 🌍 Mobilität (mobilitate): Länder oder Orte, an denen der Kandidat gearbeitet hat.
 - 📚 Ausbildung: Niveau und Fachrichtung
 - 💼 Berufserfahrung: Positionen, Unternehmen, Dauer
 - 🛠️ Kompetenzen: Tools, Software, Zertifikate
