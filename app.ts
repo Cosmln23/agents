@@ -911,7 +911,7 @@ async function handleUserMessage(
     // ============================================
 
     session.lastUpdate = Date.now();
-    session.lastMessage = messageText || `[Media: ${mediaMetadata?.mimeType}]`;
+    session.lastMessage = messageText || "[Media received]";
     saveSessions(sessions);
 
   } catch (error) {

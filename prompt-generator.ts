@@ -447,6 +447,26 @@ Strategy:
 
 Ask ONE field at a time. Wait for response, then move to next.`,
 
+      waiting_qualification: `\n🎯 PHASE: WAITING QUALIFICATION
+═════════════════════════════════════════
+CV has been read. Now collecting logistical details.
+Ask: Availability date & accommodation needs.
+Wait for user to respond to both questions.`,
+
+      waiting_candidate_note: `\n🎯 PHASE: WAITING CANDIDATE NOTE
+═════════════════════════════════════════
+Logistical details collected. Offer user chance to add personal note.
+Can be declined with "NU" or answered with text.`,
+
+      waiting_dispatch_consent: `\n🎯 PHASE: WAITING DISPATCH CONSENT
+═════════════════════════════════════════
+Job matches found. Show top matches. Request explicit GDPR consent.
+Wait for user's DA/NU decision.`,
+
+      dispatched: `\n🎯 PHASE: DISPATCHED
+═════════════════════════════════════════
+Profile sent to office. Confirm to user and manage next message.`,
+
       offered_job: `\n🎯 PHASE: JOB OFFER PRESENTED
 ═════════════════════════════════════════
 A matching job has been found and shown.
@@ -475,6 +495,23 @@ Ontbrekend: ${missingFields.join(", ")}
 
 Strategie: Één veld tegelijk, wacht op antwoord, volgende.`,
 
+      waiting_qualification: `\n🎯 FASE: WACHTEN QUALIFICATIE
+═════════════════════════════════════════
+CV is gelezen. Nu logistieke details verzamelen.
+Vraag: Beschikbaarheidsdatum & onderkomen.`,
+
+      waiting_candidate_note: `\n🎯 FASE: WACHTEN KANDIDAATNOTITIE
+═════════════════════════════════════════
+Logistieke details verzameld. Bied gebruiker kans voor persoonlijke notitie.`,
+
+      waiting_dispatch_consent: `\n🎯 FASE: WACHTEN VERZENDTOESTEMMING
+═════════════════════════════════════════
+Baanmatches gevonden. Toon top matches. Vraag expliciete GDPR-toestemming.`,
+
+      dispatched: `\n🎯 FASE: VERZONDEN
+═════════════════════════════════════════
+Profiel verzonden naar kantoor. Bevestig aan gebruiker.`,
+
       offered_job: `\n🎯 FASE: BAANAANBOD GEPRESENTEERD
 ═════════════════════════════════════════
 Krijg gebruiker's beslissing (JA/NEE/MISSCHIEN).`,
@@ -501,6 +538,23 @@ Missing: ${missingFields.join(", ")}
 
 Strategy: One field at a time, wait for response, move to next.`,
 
+      waiting_qualification: `\n🎯 PHASE: WAITING QUALIFICATION
+═════════════════════════════════════════
+CV has been read. Now collecting logistical details.
+Ask: Availability date & accommodation needs.`,
+
+      waiting_candidate_note: `\n🎯 PHASE: WAITING CANDIDATE NOTE
+═════════════════════════════════════════
+Logistical details collected. Offer user chance to add personal note.`,
+
+      waiting_dispatch_consent: `\n🎯 PHASE: WAITING DISPATCH CONSENT
+═════════════════════════════════════════
+Job matches found. Show top matches. Request explicit GDPR consent.`,
+
+      dispatched: `\n🎯 PHASE: DISPATCHED
+═════════════════════════════════════════
+Profile sent to office. Confirm to user.`,
+
       offered_job: `\n🎯 PHASE: JOB OFFER PRESENTED
 ═════════════════════════════════════════
 Get user's decision (YES/NO/MAYBE).`,
@@ -523,6 +577,23 @@ Dies sollte vorher abgehandelt worden sein.`,
 Erfasse fehlende Felder schrittweise.
 
 Fehlend: ${missingFields.join(", ")}`,
+
+      waiting_qualification: `\n🎯 PHASE: WARTEN QUALIFIZIERUNG
+═════════════════════════════════════════
+Lebenslauf gelesen. Jetzt logistische Details erfassen.
+Frage: Verfügbarkeitsdatum & Unterkunftsbedarf.`,
+
+      waiting_candidate_note: `\n🎯 PHASE: WARTEN KANDIDATENNOTIZ
+═════════════════════════════════════════
+Logistische Details erfasst. Nutzer kann persönliche Notiz hinzufügen.`,
+
+      waiting_dispatch_consent: `\n🎯 PHASE: WARTEN VERSANDZUSTIMMUNG
+═════════════════════════════════════════
+Stellenübereinstimmungen gefunden. Zeige Top Matches. Fordere GDPR-Zustimmung an.`,
+
+      dispatched: `\n🎯 PHASE: VERSANDT
+═════════════════════════════════════════
+Profil zum Büro versendet. Bestätigung an Nutzer.`,
 
       offered_job: `\n🎯 PHASE: STELLENANGEBOT PRÄSENTIERT
 ═════════════════════════════════════════

@@ -107,7 +107,7 @@ interface CVExtractionResult {
   mobilitate?: string | null;
   education?: string | null;
   experience_summary?: string | null;
-  hard_skills?: string[] | null;
+  hard_skills?: string[] | undefined;
   language_level?: "A1" | "A2" | "B1" | "B2" | "C1" | "C2" | null;
   extraction_confidence?: number; // 0-100
   extraction_notes?: string | null; // "Couldn't find experience section", etc.
