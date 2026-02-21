@@ -47,30 +47,20 @@ export class OpenAIExtended {
   private client: OpenAI;
 
   constructor(apiKey?: string) {
-    this.client = new OpenAI({ apiKey });
+    this.client = new OpenAI({
+      apiKey: apiKey || process.env.OPENAI_API_KEY,
+      defaultHeaders: {
+        "User-Agent": "openai-node/6.0.0"
+      }
+    });
   }
 
   /**
-   * Call OpenAI Chat Completions with structured output
+   * Parse structured data from OpenAI API
+   * Uses standard API with JSON response parsing (fallback-first approach)
    *
-   * Type-safe replacement for:
-   * (openai as any).beta.chat.completions.parse()
-   *
-   * @param options - Chat completion options with response_format for structured output
+   * @param options - Chat completion options
    * @returns Parsed structured output of type T
-   *
-   * @example
-   * const result = await openaiExt.parseStructured<CandidateData>({
-   *   model: "gpt-4o-mini",
-   *   messages: [{ role: "user", content: "Extract candidate info from: ..." }],
-   *   response_format: {
-   *     type: "json_schema",
-   *     json_schema: {
-   *       name: "candidate",
-   *       schema: CandidateSchema.description("...").shape,
-   *     }
-   *   }
-   * });
    */
   async parseStructured<T extends Record<string, any>>(
     options: {
@@ -89,39 +79,49 @@ export class OpenAIExtended {
       };
       temperature?: number;
       max_tokens?: number;
-      timeout?: number; // NEW: Optional timeout in milliseconds (default 30s)
+      timeout?: number;
     }
   ): Promise<T> {
     try {
-      const timeout = options.timeout || 30000; // Default 30 seconds
+      const timeout = options.timeout || 30000;
 
-      // Create timeout promise that rejects after specified time
+      // Create timeout promise
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(
           () =>
             reject(
-              new Error(
-                `OpenAI API timeout (${timeout}ms exceeded). Model: ${options.model}`
-              )
+              new Error(`OpenAI API timeout (${timeout}ms exceeded)`)
             ),
           timeout
         )
       );
 
-      // Race between API call and timeout
-      const apiCall = (this.client as any).beta.chat.completions.parse(
-        options
-      );
+      // Use standard chat completions API
+      const apiCall = this.client.chat.completions.create({
+        model: options.model,
+        messages: options.messages,
+        temperature: options.temperature ?? 0,
+        max_tokens: options.max_tokens,
+      });
+
       const response = await Promise.race([apiCall, timeoutPromise]);
 
-      // Extract and validate the parsed output
-      if (response.choices?.[0]?.message?.parsed) {
-        return response.choices[0].message.parsed as T;
+      // Extract content from response
+      const content = response.choices?.[0]?.message?.content || "";
+
+      if (!content) {
+        throw new Error("Empty response from API");
       }
 
-      throw new Error("No parsed output received from API");
+      // Parse JSON from response
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        throw new Error(`No JSON found in response: ${content.substring(0, 100)}`);
+      }
+
+      return JSON.parse(jsonMatch[0]) as T;
     } catch (error) {
-      console.error("❌ OpenAI Structured Output Error:", error);
+      console.error("❌ OpenAI Parse Error:", error);
       throw error;
     }
   }
